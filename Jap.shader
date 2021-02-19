@@ -27,7 +27,9 @@
         {
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
+            
             CGPROGRAM
+            //#pragma enable_d3d11_debug_symbols
             #pragma vertex vert
             #pragma fragment frag
 
@@ -129,11 +131,12 @@
                 v2f o;
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(v.vertex.xyz);
                 //o.vertex = UnityObjectToClipPos(v.vertex);
-                o.vertex = v.vertex*2.0;
+                //o.vertex = v.vertex*2.0;
                 o.vertex.x = v.vertex.x*2.0;
                 o.vertex.y = v.vertex.y*2.0;
                 o.vertex.z = v.vertex.z;
                 o.vertex.w = v.vertex.w;
+                //o.vertex = v.vertex;
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.screenPos = ComputeScreenPos(o.vertex);
                 return o;
@@ -286,18 +289,18 @@
                 float t = 1.0;
 
                 // bounding volume test first
-                float2 sph = iCylinderY( ro, rd, 1.5 );
+                //float2 sph = iCylinderY( ro, rd, 1.5 );
                 //float2 sph = iConeY(ro-float3(-0.05,3.7,0.35),rd,0.08);
             
-                if( sph.y<0.0 ) 
-                {
-                    return float2(-1.0,-1.0);
-                }                
+                //if( sph.y<0.0 ) 
+                //{
+                //    return float2(-1.0,-1.0);
+                //}                
             
                 // clip raymarch space to bonding volume
-                tmax = min(tmax,sph.y);
-                t    = max(1.0, sph.x);
-                tmax = 20;
+                //tmax = min(tmax,sph.y);
+                //t    = max(1.0, sph.x);
+                tmax = 50;
                 t = 1;
             
                 // raymarch
@@ -329,19 +332,19 @@
                 return (t<0.15)?1.0-s:s;
             }
 
-            float3 renderJap( in float2 p, in float3 ro, in float3 rd, in float tmax, in float3 col, in float time )
-            {
-                // --------------------------
-                // find ray-girl intersection
-                // --------------------------
+            float4 renderJap( in float2 p, in float3 ro, in float3 rd, in float tmax, in float3 col, in float time )
+            { 
                 float3 cma, uvw;
                 float2 tm = intersect( ro, rd, tmax, time, cma, uvw );
+
+                float out_alpha = 0;
 
                 // --------------------------
                 // shading/lighting	
                 // --------------------------
                 if( tm.y>0.0 )
-                {                     
+                {           
+                    out_alpha = 1;
                     float3 pos = ro + tm.x*rd;
                     float3 nor = calcNormal(pos, time);
 
@@ -583,51 +586,53 @@
                     col *= 1.1;
                 }
                 //if( tm.x==-1.0) col=float3(1,0,0);            
-                return col;
+                return float4(col,out_alpha*0.1);
             }
 
             half4 frag(v2f input) : SV_Target  
             {
-                //return half4(1,1,1,0.1);
+                //return 0;
                 half4 fragColor = half4 (1 , 1 , 1 , 1);
                 float2 fragCoord = ((input.screenPos.xy) / (input.screenPos.w + FLT_MIN)) * _ScreenParams.xy;
-                float3 tot = float3 (0.0 , 0.0 , 0.0);
-                #if AA > 1
-                    return 1;
+                float4 tot = 0;
+                #if AA > 1                    
                     for (int m = ZEROExtended; m < AA; m++)
-                    for (int n = ZEROExtended; n < AA; n++)
-                    {
-                        // pixel coordinates 
-                        float2 o = float2 (float(m) , float(n)) / float(AA) - 0.5;
-                        float2 p = (-_ScreenParams.xy + 2.0 * (fragCoord + o)) / _ScreenParams.y;
-                        // time coordinate ( motion blurred , shutter = 0.5 ) 
-                        float d = 0.5 * sin(fragCoord.x * 147.0) * sin(fragCoord.y * 131.0);
-                        float time = _Time.y - 0.5 * (1.0 / 24.0) * (float(m * AA + n) + d) / float(AA * AA - 1);
+                        for (int n = ZEROExtended; n < AA; n++)
+                        {
+                            // pixel coordinates 
+                            float2 o = float2 (float(m) , float(n)) / float(AA) - 0.5;
+                            float2 p = (-_ScreenParams.xy + 2.0 * (fragCoord + o)) / _ScreenParams.y;
+                            // time coordinate ( motion blurred , shutter = 0.5 ) 
+                            float d = 0.5 * sin(fragCoord.x * 147.0) * sin(fragCoord.y * 131.0);
+                            float time = _Time.y - 0.5 * (1.0 / 24.0) * (float(m * AA + n) + d) / float(AA * AA - 1);
                 #else 
-                    return 1;
-                        float2 p = (-_ScreenParams.xy + 2.0 * fragCoord) / _ScreenParams.y;
-                        float time = _Time.y;
+                            float2 p = (-_ScreenParams.xy + 2.0 * fragCoord) / _ScreenParams.y;
+                            float time = _Time.y;
                 #endif 
-                        time += 2.0;
-                        // camera movement	
-                        float3 ro; float fl;
-                        float3x3 ca = calcCamera( time, ro, fl );
-                        //float3 rd = mul(ca,normalize(float3((p-float2(-0.52,0.12))/1.1,fl)));
-                        float3 rd = mul(ca,normalize(float3(p,fl)));
+                            time += 2.0;
+                            // camera movement	
+                            float3 ro; float fl;
+                            float3x3 ca = calcCamera( time, ro, fl );
+                            //float3 rd = mul(ca,normalize(float3((p-float2(-0.52,0.12))/1.1,fl)));
+                            float3 rd = mul(ca,normalize(float3(p,fl)));
 
-                        float3 col = 0;
-                        float tmin = 0;
+                            float4 col = 0;
+                            float tmin = 0;
 
-                        if( p.x*1.4+p.y<0.8 && -p.x*4.5+p.y<6.5 && p.x<0.48)
+                            //if( p.x*1.4+p.y<0.8 && -p.x*4.5+p.y<6.5 && p.x<0.48)
                             col = renderJap(p,ro,rd,tmin,col,time);
                
-                        // gamma 
-                        col = pow(abs(col) , float3 (0.4545, 0.4545, 0.4545));
-                        tot += col;
+                            // gamma 
+                            col = pow(abs(col) , float4 (0.4545, 0.4545, 0.4545, 1.0));
+                            tot += col;
                 #if AA > 1 
-                    }
+                        }
                     tot /= float(AA * AA);
                 #endif
+
+                return col;
+
+                /*
 
                 // compress
                 tot = 3.8*tot/(3.0+dot(tot,float3(0.333,0.333,0.333)));
@@ -642,6 +647,8 @@
                 // output 
                 fragColor = float4 (tot , 1.0);
                 return fragColor - 0.1;
+
+                */
             }
         ENDCG
         }
