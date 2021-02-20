@@ -26,6 +26,8 @@
         {
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
+            Cull Off
+            ZTest Always
             
             CGPROGRAM
             //#pragma enable_d3d11_debug_symbols
@@ -133,7 +135,7 @@
                 //o.vertex = v.vertex*2.0;
                 o.vertex.x = v.vertex.x*2.0;
                 o.vertex.y = v.vertex.y*2.0;
-                o.vertex.z = 0.1;
+                o.vertex.z = 1.0;
                 o.vertex.w = 1.0;
                 //o.vertex = v.vertex;
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
@@ -598,7 +600,7 @@
 
             half4 frag(v2f input) : SV_Target  
             {
-                //return 0;
+                //return half4(1,1,1,0.2);
                 half4 fragColor = half4 (1 , 1 , 1 , 1);
                 float2 fragCoord = ((input.screenPos.xy) / (input.screenPos.w + FLT_MIN));
                 fragCoord *= _ScreenParams.xy;
