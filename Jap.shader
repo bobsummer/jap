@@ -3,7 +3,6 @@
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
-        _FL("FL",float) = 1.7
         _HeadPos("Head Pos",Vector) = (0.0,0.05,0.07,0)
         _HeadScale("Head Scale",Vector) = (0.8,0.75,0.85,0)
 
@@ -53,10 +52,10 @@
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
-            float  _FL;
             float3 cur_cameraRight;
             float3 cur_cameraForward;
             float3 cur_cameraUp;
+            float  cur_camFocalLen;
 
             float4 _HeadPos;
             float4 _HeadScale;
@@ -134,21 +133,25 @@
                 //o.vertex = v.vertex*2.0;
                 o.vertex.x = v.vertex.x*2.0;
                 o.vertex.y = v.vertex.y*2.0;
-                o.vertex.z = v.vertex.z;
-                o.vertex.w = v.vertex.w;
+                o.vertex.z = 0.1;
+                o.vertex.w = 1.0;
                 //o.vertex = v.vertex;
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.screenPos = ComputeScreenPos(o.vertex);
+                //o.screenPos.x = v.vertex.x+0.5;
+                //o.screenPos.y = v.vertex.y+0.5;
+                //o.screenPos.z = 0;
+                //o.screenPos.w = 1;
                 return o;
             }
 
             float3x3 calcCamera( in float time, out float3 oRo, out float oFl )
             {                
                 float3 ro = _WorldSpaceCameraPos;
-                float fl = _FL;           
+                float fl = cur_camFocalLen;           
                 oRo = ro;
                 oFl = fl;
-                return float3x3(cur_cameraRight,cur_cameraUp,cur_cameraForward);;
+                return float3x3(normalize(cur_cameraRight),normalize(cur_cameraUp),normalize(cur_cameraForward));
             }
 
             float4 map( in float3 pos, in float time, out float outMat, out float3 uvw )
@@ -158,20 +161,23 @@
                 float3 oriPos = pos;
             
                 // head deformation and transformation
-                pos.y /= 1.04;
+                //pos.y /= 1.04;
                 float3 opos = 0;
                 //opos = moveHead( pos, animHead, smoothstep(-1.2, 0.2,pos.y) );
                 //pos  = moveHead( pos, animHead, smoothstep(-1.4,-1.0,pos.y) );
-                pos.x *= 1.04;
-                pos.y /= 1.02;
+                //pos.x *= 1.04;
+                //pos.y /= 1.02;
                 uvw = pos;
 
                 // symmetric coord systems (sharp, and smooth)
                 float3 qos = float3(abs(pos.x),pos.yz);
-                float3 sos = float3(sqrt(qos.x*qos.x+0.0005),pos.yz);                  
+                float3 sos = float3(sqrt(qos.x*qos.x+0.0005),pos.yz);
+                
+                float3 headPos = unity_ObjectToWorld._m03_m13_m23;
+                //headPos = _HeadPos.xyz;
             
                 // head
-                float d = sdEllipsoid( pos-_HeadPos.xyz, _HeadScale.xyz );
+                float d = sdEllipsoid( pos-headPos, _HeadScale.xyz );
 
                 // jaw
                 float3 mos = pos-_JawPos1; 
@@ -187,7 +193,7 @@
                 // _JawBaseScale.y+sclamp(mos.y*0.5,-0.5,0.2),
                 // _JawBaseScale.z+sclamp(mos.y*0.3,-0.45,0.5)));
 
-                d = smin(d,d2,_HeadJawSMin);
+                //d = smin(d,d2,_HeadJawSMin);
                 float4 res = float4( d, 0, 0, 0 );
                 return res;          
             }
@@ -300,7 +306,7 @@
                 // clip raymarch space to bonding volume
                 //tmax = min(tmax,sph.y);
                 //t    = max(1.0, sph.x);
-                tmax = 50;
+                tmax = 100;
                 t = 1;
             
                 // raymarch
@@ -343,7 +349,8 @@
                 // shading/lighting	
                 // --------------------------
                 if( tm.y>0.0 )
-                {           
+                {   
+                    //return float4(1,1,1,0.1);
                     out_alpha = 1;
                     float3 pos = ro + tm.x*rd;
                     float3 nor = calcNormal(pos, time);
@@ -593,7 +600,8 @@
             {
                 //return 0;
                 half4 fragColor = half4 (1 , 1 , 1 , 1);
-                float2 fragCoord = ((input.screenPos.xy) / (input.screenPos.w + FLT_MIN)) * _ScreenParams.xy;
+                float2 fragCoord = ((input.screenPos.xy) / (input.screenPos.w + FLT_MIN));
+                fragCoord *= _ScreenParams.xy;
                 float4 tot = 0;
                 #if AA > 1                    
                     for (int m = ZEROExtended; m < AA; m++)
@@ -607,22 +615,18 @@
                             float time = _Time.y - 0.5 * (1.0 / 24.0) * (float(m * AA + n) + d) / float(AA * AA - 1);
                 #else 
                             float2 p = (-_ScreenParams.xy + 2.0 * fragCoord) / _ScreenParams.y;
+                            //return half4((p.yyy),1);
                             float time = _Time.y;
                 #endif 
                             time += 2.0;
-                            // camera movement	
                             float3 ro; float fl;
                             float3x3 ca = calcCamera( time, ro, fl );
-                            //float3 rd = mul(ca,normalize(float3((p-float2(-0.52,0.12))/1.1,fl)));
-                            float3 rd = mul(ca,normalize(float3(p,fl)));
-
+                            float3 rd = normalize(float3(p,fl));
+                            rd = mul(rd,ca);
                             float4 col = 0;
                             float tmin = 0;
-
-                            //if( p.x*1.4+p.y<0.8 && -p.x*4.5+p.y<6.5 && p.x<0.48)
                             col = renderJap(p,ro,rd,tmin,col,time);
                
-                            // gamma 
                             col = pow(abs(col) , float4 (0.4545, 0.4545, 0.4545, 1.0));
                             tot += col;
                 #if AA > 1 
