@@ -59,6 +59,8 @@
             float3 cur_cameraUp;
             float  cur_camFocalLen;
 
+            float4x4 _JawTransform;
+
             float4 _HeadPos;
             float4 _HeadScale;
             float4 _RayOrigin;
@@ -131,28 +133,19 @@
             {
                 v2f o;
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(v.vertex.xyz);
-                //o.vertex = UnityObjectToClipPos(v.vertex);
-                //o.vertex = v.vertex*2.0;
                 o.vertex.x = v.vertex.x*2.0;
                 o.vertex.y = v.vertex.y*2.0;
                 o.vertex.z = 1.0;
                 o.vertex.w = 1.0;
-                //o.vertex = v.vertex;
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.screenPos = ComputeScreenPos(o.vertex);
-                //o.screenPos.x = v.vertex.x+0.5;
-                //o.screenPos.y = v.vertex.y+0.5;
-                //o.screenPos.z = 0;
-                //o.screenPos.w = 1;
-                return o;
+                 return o;
             }
 
             float3x3 calcCamera( in float time, out float3 oRo, out float oFl )
             {                
-                float3 ro = _WorldSpaceCameraPos;
-                float fl = cur_camFocalLen;           
-                oRo = ro;
-                oFl = fl;
+                oRo = _WorldSpaceCameraPos;
+                oFl = cur_camFocalLen;
                 return float3x3(normalize(cur_cameraRight),normalize(cur_cameraUp),normalize(cur_cameraForward));
             }
 
@@ -175,28 +168,36 @@
                 float3 qos = float3(abs(pos.x),pos.yz);
                 float3 sos = float3(sqrt(qos.x*qos.x+0.0005),pos.yz);
                 
-                float3 headPos = unity_ObjectToWorld._m03_m13_m23;
-                //headPos = _HeadPos.xyz;
-            
-                // head
+                float3 headPos = mul(unity_ObjectToWorld,float4(_HeadPos.xyz,1));
                 float d = sdEllipsoid( pos-headPos, _HeadScale.xyz );
 
+                float3 jaw_pos1 = mul(unity_ObjectToWorld,float4(_JawPos1.xyz,1));
+                float3 jaw_pos2 = mul(unity_ObjectToWorld,float4(_JawPos2.xyz,1));
+                jaw_pos2 = _JawPos2.xyz;
+
                 // jaw
-                float3 mos = pos-_JawPos1; 
+                float3 pos_for_jaw = mul(_JawTransform,float4(pos,1));
+
+                float3 mos = pos-jaw_pos1; 
                 mos.yz = rot(mos.yz,_JawRot1);
-                //mos.yz = rot(mos.yz,_JawRot2*animData.z);
-                float d2 = sdEllipsoid(mos-_JawPos2,
-                float3(
-                _JawBaseScale.x,
-                _JawBaseScale.y,
-                _JawBaseScale.z));
+                //mos += jaw_pos1;
+                //mos.yz = rot(mos.yz,_JawRot2/**animData.z*/);
+
+                float3 jawScale = _JawBaseScale + 
+                float3(sclamp(mos.y*0.9-0.1*mos.z,-0.3,0.4),
+                sclamp(mos.y*0.5,-0.5,0.2),
+                sclamp(mos.y*0.3,-0.45,0.5));
+
+                jawScale = _JawBaseScale;
+
+                float d2 = sdEllipsoid(pos_for_jaw,jawScale);
                 // float3(
                 // _JawBaseScale.x+sclamp(mos.y*0.9-0.1*mos.z,-0.3,0.4),
                 // _JawBaseScale.y+sclamp(mos.y*0.5,-0.5,0.2),
                 // _JawBaseScale.z+sclamp(mos.y*0.3,-0.45,0.5)));
 
-                //d = smin(d,d2,_HeadJawSMin);
-                float4 res = float4( d, 0, 0, 0 );
+                d = smin(d,d2,_HeadJawSMin);
+                float4 res = float4( d2, 0, 0, 0 );
                 return res;          
             }
 
